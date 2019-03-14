@@ -1,5 +1,3 @@
-# very simple RPC server in python
-
 import sys, json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import urllib.parse as urlparse
@@ -26,36 +24,13 @@ def ApiRoute(path):
 
 class ApiServer(HTTPServer):
     def __init__(self, addr, port):
-        """
-        Create a new server on address, port.  Port can be zero.
-
-        from apiserver import ApiServer, ApiError, ApiRoute
-
-        Create your handlers by inheriting from ApiServer and tagging them with @ApiRoute("/path").
-
-        Alternately you can use the ApiServer() directly, and call add_handler("path", function)
-
-        Raise errors by raising ApiError(code, message, description=None)
-
-        Return responses by simply returning a dict() or str() object
-
-        Parameter to handlers is a dict()
-
-        Query arguments are shoved into the dict via urllib.parse_qs
-
-        """
         server_address = (addr, port)
         self.__addr = addr
-
-        # instead of attempting multiple inheritence
-
-        # shim class that is an ApiHandler
         class handler_class(ApiHandler):
             pass
 
         self.handler_class = handler_class
 
-        # routed methods map into handler
         for meth in type(self).__dict__.values():
             if hasattr(meth, "_routes"):
                 for route in meth._routes:
@@ -67,17 +42,14 @@ class ApiServer(HTTPServer):
         self.handler_class._routes[path] = meth
         
     def port(self):
-        "Get my port"
         sa = self.socket.getsockname()
         return sa[1]
 
     def address(self):
-        "Get my ip address"
         sa = self.socket.getsockname()
         return sa[0]
 
     def uri(self, path):
-        "Make a URI pointing at myself"
         if path[0] == "/":
             path = path[1:]
         return "http://"+self.__addr + ":"+ str(self.port()) + "/" + path
@@ -145,55 +117,4 @@ class ApiHandler(BaseHTTPRequestHandler):
             except ConnectionAbortedError as e:
                 log.error(f"GET {self.path} : {e}")
 
-import unittest
 
-class TestRest(unittest.TestCase):
-    def test_basic(self):
-        class MyServer(ApiServer): 
-            @ApiRoute("/popup")
-            def popup(req):
-                return "HERE"
-
-            @ApiRoute("/json")
-            def json(req):
-                return {"obj":1}
-
-        httpd = MyServer('127.0.0.1', 0)
-
-        httpd.add_route("/foo", lambda x: "FOO" + x["x"][0])
-
-        try:
-            print("serving on ", httpd.address(), httpd.port())
-
-            threading.Thread(target=httpd.serve_forever).start()
-
-            import requests
-            response = requests.post(httpd.uri("/popup"), data='{}')
-            self.assertEqual(response.text, "HERE")
-
-            response = requests.post(httpd.uri("/notfound"), data='{}')
-            self.assertEqual(response.status_code, 404)
-
-            response = requests.get(httpd.uri("/foo?x=4"))
-            self.assertEqual(response.text, "FOO4")
-        finally:
-            httpd.shutdown()
-
-    def test_error(self):
-        class MyServer(ApiServer): 
-            @ApiRoute("/popup")
-            def popup(req):
-                raise ApiError(501, "BLAH")
-
-        httpd = MyServer('127.0.0.1', 0)
-
-        try:
-            print("serving on ", httpd.address(), httpd.port())
-
-            threading.Thread(target=httpd.serve_forever).start()
-
-            import requests
-            response = requests.post(httpd.uri("/popup"), data='{}')
-            self.assertEqual(response.status_code, 501)
-        finally:
-            httpd.shutdown()
